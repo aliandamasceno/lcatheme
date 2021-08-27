@@ -1,0 +1,170 @@
+library(tidyverse)
+library(lubridate)
+library(esquisse)
+library(zoo)
+
+setwd("D:/LCA/Projetos/Compass/Mercado Livre de energia")
+
+####CCEE####
+
+dados <- read.csv("D:/LCA/Projetos/Compass/Mercado Livre de energia/CCEE/Varia??o_de_consumo_por_estado_Dados_completos_data.csv", header = TRUE, sep = ";", dec = ",")
+
+
+dados$Data <- dmy(dados$Data)
+dados$date <- as.yearmon(dados$Data)
+dados$date <- as.Date(dados$date)
+
+dados_sp <- dados %>%
+  filter(UF == "SP")
+
+dfa1 <- dados %>%
+  group_by(Ambiente, date) %>%
+  summarise(consumo = sum(Consumo..MWh.))
+
+
+CCEE_BR <- dfa1 %>%
+  spread(key = Ambiente, value = consumo)  %>%
+  mutate(total = ACL + ACR,
+         Livre = ACL / total * 100) %>%
+  select(date, Livre) %>%
+  mutate(Unidade = "Brasil")
+
+
+dfa5 <- dados_sp %>%
+  group_by(Ambiente, date) %>%
+  summarise(consumo = sum(Consumo..MWh.)) 
+
+CCEE_SP <- dfa5 %>%
+  spread(key = Ambiente, value = consumo)  %>%
+  mutate(total = ACL + ACR,
+         Livre = ACL / total * 100) %>%
+  select(date, Livre)%>%
+  mutate(Unidade = "S?o Paulo")
+
+CCEE  <- rbind(CCEE_BR, CCEE_SP)
+
+
+ggplot(CCEE)+
+  aes(x = date, y=Livre, color = Unidade, linetype = Unidade) +
+  geom_line(size = 1.7)+
+  scale_x_date(limits = as.Date(c("2019-08-01", "2021-08-01")),
+               date_labels= "%m %Y")+
+  geom_smooth(se = FALSE, method = "lm")+
+  scale_fill_brewer(palette = "BrBG", direction = 1) +
+  labs(
+    x = "M?s",
+    y = "% Consumo Livre",
+    caption = "Fonte: CCEE. Elabora??o LCA Consultores"
+  ) +
+  ggthemes::theme_few() +
+  theme(
+    plot.title = element_text(
+      size = 16L,
+      face = "bold",
+      hjust = 0.5
+    ),
+    axis.title.y = element_text(size = 16L),
+    axis.title.x = element_text(size = 16L),
+    legend.position = "bottom",
+    legend.text = element_text(size = 12L),
+    axis.text = element_text(size = 12L),
+    text = element_text(family = "sans"),
+    plot.caption = element_text(size = 10L, hjust = 0)
+  )
+
+
+
+write.table(CCEE, "CCEE.CSV", sep = ";", dec = ",", row.names = FALSE, col.names = TRUE)
+
+
+####EPE####
+
+dados <- read.csv("D:/LCA/Projetos/Compass/Mercado Livre de energia/EPE/dados-anuario.csv", header = TRUE, sep = ";", dec = ",")
+
+dados$Data <- ymd(dados$Data)
+dados$date <- as.yearmon(dados$Data, "%Y-%m")
+dados$date <- as.Date(dados$date)
+
+
+dados_sp <- dados %>%
+  filter(UF == "SP")
+
+dfa2 <- dados %>%
+  group_by(TipoConsumidor, date) %>%
+  summarise(consumo = sum(Consumo))
+  
+EPE_BR <- dfa2 %>%
+  spread(key = TipoConsumidor, value = consumo) %>%
+  mutate(total = Cativo + Livre,
+         Livre = Livre / total*100) %>%
+  select(date, Livre) %>%
+  mutate(Unidade = "Brasil")
+
+dfa4 <- dados_sp %>%
+  group_by(TipoConsumidor, date) %>%
+  summarise(consumo = sum(Consumo)) 
+
+EPE_SP <- dfa4 %>%
+  spread(key = TipoConsumidor, value = consumo)  %>%
+  mutate(total = Cativo + Livre,
+         Livre = Livre / total *100) %>%
+  select(date, Livre) %>%
+  mutate(Unidade = "S?o Paulo")  
+
+
+EPE <- rbind(EPE_BR, EPE_SP)
+
+ggplot(EPE)+
+  aes(x = date, y=Livre, color = Unidade, linetype = Unidade) +
+  geom_line(size = 1.7)+
+  scale_x_date(limits = as.Date(c("2012-12-01", "2020-01-01")),
+               date_labels= "%m %Y")+
+  scale_fill_brewer(palette = "BrBG", direction = 1) +
+  geom_smooth(se = FALSE, method = "lm")+
+  labs(
+    x = "M?s",
+    y = "% Consumo Livre",
+    caption = "Fonte: EPE/MME. Elabora??o LCA Consultores"
+  ) +
+  ggthemes::theme_few() +
+  theme(
+    plot.title = element_text(
+      size = 16L,
+      face = "bold",
+      hjust = 0.5
+    ),
+    axis.title.y = element_text(size = 16L),
+    axis.title.x = element_text(size = 16L),
+    legend.position = "bottom",
+    axis.text = element_text(size = 12L),
+    legend.text = element_text(size = 12L),
+    text = element_text(family = "sans"),
+    plot.caption = element_text(size = 10L, hjust = 0)
+  )
+
+
+write.table(EPE, "EPE.CSV", sep = ";", dec = ",", row.names = FALSE, col.names = TRUE)
+
+dados_sp$date <- year(dados_sp$Data)
+dados$date <- year(dados$Data)
+
+dados_sp <- dados_sp %>%
+  filter(TipoConsumidor == "Livre") %>%
+  group_by(date) %>%
+  summarise(Consumo = sum(Consumo),
+            Consumidores = sum(Consumidores)) %>%
+  mutate(Unidade = "S?o Paulo")
+
+dados <- dados %>%
+  filter(TipoConsumidor == "Livre") %>%
+  group_by(date) %>%
+  summarise(Consumo = sum(Consumo),
+            Consumidores = sum(Consumidores)) %>%
+  mutate(Unidade = "Brasil")
+
+
+table <- rbind(dados, dados_sp)
+
+write.table(table, "tabela.csv", sep = ";", dec = ",", row.names = FALSE, col.names = TRUE)
+
+
